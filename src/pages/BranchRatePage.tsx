@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth, useBranches } from "../contexts/AuthContext";
@@ -40,15 +39,11 @@ const BranchRatePage = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [isSuccessful, setIsSuccessful] = useState(false);
   
-  // Find the branch we're working with
   const branch = branches.find(b => b.id === branchId);
   
-  // Check if user has permission to modify rates
-  // Only parent branches or users viewing their own branch can modify rates
   const canModifyRate = user?.branch.type === "parent" || user?.branchId === branchId;
   
   useEffect(() => {
-    // If branch exists, set current rate
     if (branch) {
       setNewRate(currentRate.toString());
     }
@@ -66,7 +61,7 @@ const BranchRatePage = () => {
     ];
   };
   
-  const handleUpdateRate = () => {
+  const handleUpdateRate = async () => {
     const parsedRate = parseFloat(newRate);
     
     if (isNaN(parsedRate) || parsedRate < 0) {
@@ -74,7 +69,6 @@ const BranchRatePage = () => {
       return;
     }
     
-    // Find all children branches that will be affected
     if (branch) {
       const affected = findChildBranches(branch.id).map(b => ({
         ...b,
@@ -85,7 +79,7 @@ const BranchRatePage = () => {
         {
           ...branch,
           rate: parsedRate,
-          type: branch.type === "parent" ? "parent" : "child"
+          type: branch.parent ? "child" : "parent"
         },
         ...affected
       ]);
@@ -94,21 +88,34 @@ const BranchRatePage = () => {
     }
   };
   
-  const confirmRateUpdate = () => {
+  const confirmRateUpdate = async () => {
     setIsUpdating(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const response = await fetch(`http://localhost:8080/api/rate/${branchId}?rate=${parseFloat(newRate)}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update rate');
+      }
+
       setCurrentRate(parseFloat(newRate));
       setIsConfirmDialogOpen(false);
-      setIsUpdating(false);
       setIsSuccessful(true);
       
       setTimeout(() => {
         setIsSuccessful(false);
         toast.success(`Rate updated successfully to ${newRate}%`);
       }, 2000);
-    }, 1500);
+    } catch (error) {
+      toast.error('Failed to update rate');
+    } finally {
+      setIsUpdating(false);
+    }
   };
   
   if (!branch) {
@@ -218,7 +225,6 @@ const BranchRatePage = () => {
         </CardContent>
       </Card>
       
-      {/* Confirmation Dialog */}
       <AlertDialog open={isConfirmDialogOpen} onOpenChange={setIsConfirmDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -1,18 +1,25 @@
 
 import React, { createContext, useState, useContext, useEffect } from "react";
 
-type BranchType = "parent" | "child";
+interface Account {
+  id: number;
+  name: string;
+  rate: number;
+  branch: Branch;
+}
 
 interface Branch {
-  id: string;
+  id: number;
   name: string;
-  type: BranchType;
-  parentId: string | null;
+  rate: number;
+  parent: Branch | null;
+  children: Branch[];
+  accounts: Account[];
 }
 
 interface User {
-  id: string;
-  branchId: string;
+  id: number;
+  branchId: number;
   branch: Branch;
 }
 
@@ -25,23 +32,13 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock branches data
-const mockBranches: Branch[] = [
-  { id: "1", name: "Head Office", type: "parent", parentId: null },
-  { id: "2", name: "North Region", type: "parent", parentId: "1" },
-  { id: "3", name: "South Region", type: "parent", parentId: "1" },
-  { id: "4", name: "North City Branch", type: "child", parentId: "2" },
-  { id: "5", name: "North Town Branch", type: "child", parentId: "2" },
-  { id: "6", name: "South City Branch", type: "child", parentId: "3" },
-  { id: "7", name: "South Town Branch", type: "child", parentId: "3" },
-];
+const API_BASE_URL = 'http://localhost:8080/api';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    // Check if user is logged in from local storage
     const storedUser = localStorage.getItem("user");
     if (storedUser) {
       setUser(JSON.parse(storedUser));
@@ -51,26 +48,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (branchId: string, password: string): Promise<void> => {
     setIsLoading(true);
-    
-    // In a real app, you would validate credentials against a backend
-    // For this demo, we'll just check if the branch exists
-    const branch = mockBranches.find(b => b.id === branchId);
-    
-    if (!branch) {
-      setIsLoading(false);
-      throw new Error("Invalid branch ID");
-    }
+    try {
+      // Fetch branch details from your API
+      const response = await fetch(`${API_BASE_URL}/branches`);
+      const branches: Branch[] = await response.json();
+      
+      const branch = branches.find(b => b.id.toString() === branchId);
+      
+      if (!branch) {
+        throw new Error("Invalid branch ID");
+      }
 
-    // Mock successful login
-    const loggedInUser = {
-      id: `user-${Date.now()}`,
-      branchId: branch.id,
-      branch: branch
-    };
-    
-    setUser(loggedInUser);
-    localStorage.setItem("user", JSON.stringify(loggedInUser));
-    setIsLoading(false);
+      // In a real app, you would validate credentials against your backend
+      // For now, we'll just create a user object based on the branch
+      const loggedInUser = {
+        id: Date.now(),
+        branchId: branch.id,
+        branch: branch
+      };
+      
+      setUser(loggedInUser);
+      localStorage.setItem("user", JSON.stringify(loggedInUser));
+    } catch (error) {
+      throw new Error("Failed to login");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
@@ -94,5 +97,22 @@ export const useAuth = (): AuthContextType => {
 };
 
 export const useBranches = () => {
-  return { branches: mockBranches };
+  const [branches, setBranches] = useState<Branch[]>([]);
+
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/branches`);
+        const data = await response.json();
+        setBranches(data);
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+      }
+    };
+
+    fetchBranches();
+  }, []);
+
+  return { branches };
 };
+
